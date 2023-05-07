@@ -15,6 +15,10 @@ import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
 import android.widget.TextView;
 
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import java.lang.ref.WeakReference;
 
 public class MainActivity extends AppCompatActivity
@@ -31,6 +35,10 @@ implements LoaderManager.LoaderCallbacks<String> {
         mBookInput = (EditText) findViewById(R.id.bookInput);
         mAuthorText = (TextView) findViewById(R.id.authorText);
         mTitleText = (TextView)  findViewById(R.id.titleText);
+
+        if (getSupportLoaderManager().getLoader(0) != null){
+            getSupportLoaderManager().initLoader(0, null, this);
+        }
 
     }
 
@@ -54,7 +62,9 @@ implements LoaderManager.LoaderCallbacks<String> {
         }
         if (networkInfo != null && networkInfo.isConnected() &&
         queryString.length() != 0) {
-            new FetchBook(mTitleText, mAuthorText).execute(queryString);
+            Bundle queryBundle = new Bundle();
+            queryBundle.putString("queryString", queryString);
+            getSupportLoaderManager().restartLoader(0, queryBundle,this);
 
             mAuthorText.setText("");
             mTitleText.setText(R.string.loading);
@@ -73,12 +83,49 @@ implements LoaderManager.LoaderCallbacks<String> {
     @NonNull
     @Override
     public Loader<String> onCreateLoader(int id, @Nullable Bundle args) {
-        return null;
+        String queryString = "";
+        if (args != null) {
+            queryString = args.getString("queryString");
+        }
+        return new BookLoader(this, queryString);
     }
 
     @Override
     public void onLoadFinished(@NonNull Loader<String> loader, String data) {
+        try{
+            JSONObject jsonObject = new JSONObject(data);
+            JSONArray itemsArray = jsonObject.getJSONArray("items");
 
+            int i = 0;
+            String title = null;
+            String authors = null;
+
+            while (i < itemsArray.length() && (authors == null && title == null)) {
+                JSONObject book = itemsArray.getJSONObject(i);
+                JSONObject volumeInfo = book.getJSONObject("volumeInfo");
+
+                try {
+                    title = volumeInfo.getString("title");
+                    authors = volumeInfo.getString("authors");
+                } catch (Exception e){
+                    e.printStackTrace();
+                }
+
+                i++;
+
+                if (title != null && authors != null) {
+                    mTitleText.setText(title);
+                    mAuthorText.setText(authors);
+                }else{
+                    mTitleText.setText(R.string.no_results);
+                    mAuthorText.setText("");
+
+                }
+            }
+        }catch(JSONException e){
+            mTitleText.setText(R.string.no_results);
+            mAuthorText.setText("");
+        }
     }
 
     @Override
